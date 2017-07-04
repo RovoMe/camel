@@ -25,10 +25,13 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
+
 import javax.management.MBeanServer;
 import javax.servlet.Filter;
 import javax.servlet.RequestDispatcher;
@@ -620,6 +623,79 @@ public abstract class JettyHttpComponent extends HttpCommonComponent implements 
         SslContextFactory answer = new SslContextFactory();
         if (ssl != null) {
             answer.setSslContext(ssl.createSSLContext(getCamelContext()));
+
+            if (ssl.getSecureSocketProtocols() != null) {
+                String[] supportedProtocols = ssl.getSecureSocketProtocols().getSecureSocketProtocol().toArray(new String[0]);
+                if (supportedProtocols.length > 0) {
+                    answer.setIncludeProtocols(supportedProtocols);
+                    LOG.trace("Support for the following SSL/TLS protocols will be enabled {}",
+                              Arrays.toString(supportedProtocols));
+                }
+            } else if (ssl.getSecureSocketProtocolsFilter() != null) {
+                // Jetty is fine with passing in either the full protocol or a regex pattern. In
+                // case a pattern was defined within the protocol filter this pattern is just copied
+                // to Jetty's SslContextFactory
+                String[] includeProtocols = ssl.getSecureSocketProtocolsFilter().getInclude().toArray(new String[0]);
+                String[] excludeProtocols = ssl.getSecureSocketProtocolsFilter().getExclude().toArray(new String[0]);
+                String[] includeProtocolsPattern = ssl.getSecureSocketProtocolsFilter().getIncludePatterns().stream().map(Pattern::pattern).toArray(String[]::new);
+                String[] excludeProtocolsPattern = ssl.getSecureSocketProtocolsFilter().getExcludePatterns().stream().map(Pattern::pattern).toArray(String[]::new);
+
+                if (includeProtocols.length > 0) {
+                    answer.setIncludeProtocols(includeProtocols);
+                    LOG.trace("Added support for SSL/TLS protocols: {}",
+                              Arrays.toString(includeProtocols));
+                } else if (includeProtocolsPattern.length > 0) {
+                    answer.setIncludeProtocols(includeProtocolsPattern);
+                    LOG.trace("Added support for SSL/TLS protocols: {}",
+                              Arrays.toString(includeProtocolsPattern));
+                }
+
+                if (excludeProtocols.length > 0) {
+                    answer.setExcludeProtocols(excludeProtocols);
+                    LOG.trace("Disabled support for SSL/TLS protocols: {}",
+                              Arrays.toString(excludeProtocols));
+                } else if (excludeProtocolsPattern.length > 0) {
+                    answer.setExcludeProtocols(excludeProtocolsPattern);
+                    LOG.trace("Disabled support for SSL/TLS protocols: {}",
+                              Arrays.toString(excludeProtocolsPattern));
+                }
+            }
+
+            if (ssl.getCipherSuites() != null) {
+                String[] supportedCiphers = ssl.getCipherSuites().getCipherSuite().toArray(new String[0]);
+                if (supportedCiphers.length > 0) {
+                    answer.setIncludeCipherSuites(supportedCiphers);
+                    LOG.trace("Support for the following SSL/TLS cipher suites will be enabled: {}. Note that the default exclusion pattern from Jetty's SslContextConfiguration may still be active",
+                              Arrays.toString(supportedCiphers));
+                }
+            } else if (ssl.getCipherSuitesFilter() != null) {
+                // again, Jetty is fine with either passing in an actual cipher suite name or a
+                // regex pattern hence the pattern is just copied over
+                String[] includeCiphers = ssl.getCipherSuitesFilter().getInclude().toArray(new String[0]);
+                String[] excludeCiphers = ssl.getCipherSuitesFilter().getExclude().toArray(new String[0]);
+                String[] includeCiphersPattern = ssl.getCipherSuitesFilter().getIncludePatterns().stream().map(Pattern::pattern).toArray(String[]::new);
+                String[] excludeCiphersPattern = ssl.getCipherSuitesFilter().getExcludePatterns().stream().map(Pattern::pattern).toArray(String[]::new);
+
+                if (includeCiphers.length > 0) {
+                    answer.setIncludeCipherSuites(includeCiphers);
+                    LOG.trace("Support for the following SSL/TLS cipher suites will be enabled: {}",
+                              Arrays.toString(includeCiphers));
+                } else if (includeCiphersPattern.length > 0) {
+                    answer.setIncludeCipherSuites(includeCiphersPattern);
+                    LOG.trace("Support for the following SSL/TLS cipher suites will be enabled: {}",
+                              Arrays.toString(includeCiphersPattern));
+                }
+
+                if (excludeCiphers.length > 0) {
+                    answer.setExcludeCipherSuites(excludeCiphers);
+                    LOG.trace("Support for any SSL/TLS cipher suites matching any of the following entries will be disabled: {}",
+                        Arrays.toString(excludeCiphers));
+                } else if (excludeCiphersPattern.length > 0) {
+                    answer.setExcludeCipherSuites(excludeCiphersPattern);
+                    LOG.trace("Support for any SSL/TLS cipher suites matching any of the following entries will be disabled: {}",
+                        Arrays.toString(excludeCiphersPattern));
+                }
+            }
         }
         return answer;
     }
